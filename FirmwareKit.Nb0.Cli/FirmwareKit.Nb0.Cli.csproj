@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\FirmwareKit.Nb0\FirmwareKit.Nb0.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AssemblyName>FirmwareKit.Nb0.Cli</AssemblyName>
+    <RootNamespace>FirmwareKit.Nb0.Cli</RootNamespace>
+  </PropertyGroup>
+
+</Project>

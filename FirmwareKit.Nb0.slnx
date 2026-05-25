@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="FirmwareKit.Nb0/FirmwareKit.Nb0.csproj" />
+  <Project Path="FirmwareKit.Nb0.Cli/FirmwareKit.Nb0.Cli.csproj" />
+  <Project Path="FirmwareKit.Nb0.Tests/FirmwareKit.Nb0.Tests.csproj" />
+</Solution>
