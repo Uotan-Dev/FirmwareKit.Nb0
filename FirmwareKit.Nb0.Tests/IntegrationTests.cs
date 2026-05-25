@@ -559,7 +559,7 @@ namespace FirmwareKit.Nb0.Tests
                     .PackTo(nb0File1);
 
                 var processor = new Nb0Processor();
-                await processor.RepackAsync(nb0File1, nb0File2, TestContext.Current.CancellationToken);
+                await processor.RepackAsync(nb0File1, nb0File2, null, TestContext.Current.CancellationToken);
 
                 var extractor = new Nb0Extractor();
                 extractor.Extract(nb0File1, extractDir1, new ExtractionOptions { VerifyMd5 = false });
@@ -592,7 +592,7 @@ namespace FirmwareKit.Nb0.Tests
                 File.WriteAllBytes(Path.Combine(inputDir, "a.bin"), Encoding.ASCII.GetBytes("Async dir A"));
                 File.WriteAllBytes(Path.Combine(inputDir, "b.bin"), Encoding.ASCII.GetBytes("Async dir B"));
 
-                await Nb0Packer.PackFromDirectoryAsync(inputDir, nb0File, TestContext.Current.CancellationToken);
+                await Nb0Packer.PackFromDirectoryAsync(inputDir, nb0File, null, TestContext.Current.CancellationToken);
 
                 Assert.True(File.Exists(nb0File));
 

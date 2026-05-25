@@ -182,7 +182,7 @@ namespace FirmwareKit.Nb0.Tests
             using var tempDir = new TempDirectory();
             var extractor = new Nb0Extractor();
             var result = await extractor.ExtractFromStreamAsync(stream, tempDir.Path,
-                new ExtractionOptions { VerifyMd5 = false, GenerateListFile = false }, TestContext.Current.CancellationToken);
+                new ExtractionOptions { VerifyMd5 = false, GenerateListFile = false }, null, TestContext.Current.CancellationToken);
 
             Assert.True(result.IsSuccess);
             Assert.Equal(1, result.ExtractedEntries);
@@ -206,7 +206,7 @@ namespace FirmwareKit.Nb0.Tests
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
                 extractor.ExtractFromStreamAsync(stream, tempDir.Path,
                     new ExtractionOptions { VerifyMd5 = false },
-                    cts.Token));
+                    null, cts.Token));
         }
 
         [Fact]

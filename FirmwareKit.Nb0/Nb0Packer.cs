@@ -50,18 +50,22 @@ namespace FirmwareKit.Nb0
         /// <para>要打包的 <see cref="Nb0Entry"/> 条目集合。</para>
         /// The collection of <see cref="Nb0Entry"/> entries to pack.
         /// </param>
+        /// <param name="progress">
+        /// <para>用于报告打包进度的进度回调。如果为 null，则不报告进度。</para>
+        /// The progress callback for reporting pack progress. If null, progress is not reported.
+        /// </param>
         /// <exception cref="ArgumentNullException">
         /// <para>当 <paramref name="outputFilePath"/> 为 null 或空字符串，或 <paramref name="entries"/> 为 null 时抛出。</para>
         /// Thrown when <paramref name="outputFilePath"/> is null or empty, or <paramref name="entries"/> is null.
         /// </exception>
-        public void Pack(string outputFilePath, IEnumerable<Nb0Entry> entries)
+        public void Pack(string outputFilePath, IEnumerable<Nb0Entry> entries, IProgress<Nb0PackProgress>? progress = null)
         {
             if (outputFilePath == null) throw new ArgumentNullException(nameof(outputFilePath));
             if (outputFilePath.Length == 0) throw new ArgumentException("Value cannot be an empty string.", nameof(outputFilePath));
             if (entries == null) throw new ArgumentNullException(nameof(entries));
 
             using var stream = new FileStream(outputFilePath, FileMode.Create, FileAccess.Write, FileShare.None, _bufferSize);
-            PackToStream(stream, entries);
+            PackToStream(stream, entries, progress);
         }
 
         /// <summary>
@@ -76,6 +80,10 @@ namespace FirmwareKit.Nb0
         /// <para>要打包的 <see cref="Nb0Entry"/> 条目集合。</para>
         /// The collection of <see cref="Nb0Entry"/> entries to pack.
         /// </param>
+        /// <param name="progress">
+        /// <para>用于报告打包进度的进度回调。如果为 null，则不报告进度。</para>
+        /// The progress callback for reporting pack progress. If null, progress is not reported.
+        /// </param>
         /// <param name="cancellationToken">
         /// <para>用于监视取消请求的令牌。</para>
         /// The token to monitor for cancellation requests.
@@ -88,14 +96,14 @@ namespace FirmwareKit.Nb0
         /// <para>当 <paramref name="outputFilePath"/> 为 null 或空字符串，或 <paramref name="entries"/> 为 null 时抛出。</para>
         /// Thrown when <paramref name="outputFilePath"/> is null or empty, or <paramref name="entries"/> is null.
         /// </exception>
-        public async Task PackAsync(string outputFilePath, IEnumerable<Nb0Entry> entries, CancellationToken cancellationToken = default)
+        public async Task PackAsync(string outputFilePath, IEnumerable<Nb0Entry> entries, IProgress<Nb0PackProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             if (outputFilePath == null) throw new ArgumentNullException(nameof(outputFilePath));
             if (outputFilePath.Length == 0) throw new ArgumentException("Value cannot be an empty string.", nameof(outputFilePath));
             if (entries == null) throw new ArgumentNullException(nameof(entries));
 
             using var stream = new FileStream(outputFilePath, FileMode.Create, FileAccess.Write, FileShare.None, _bufferSize, FileOptions.Asynchronous);
-            await PackToStreamAsync(stream, entries, cancellationToken).ConfigureAwait(false);
+            await PackToStreamAsync(stream, entries, progress, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -110,17 +118,21 @@ namespace FirmwareKit.Nb0
         /// <para>要打包的 <see cref="Nb0Entry"/> 条目集合。</para>
         /// The collection of <see cref="Nb0Entry"/> entries to pack.
         /// </param>
+        /// <param name="progress">
+        /// <para>用于报告打包进度的进度回调。如果为 null，则不报告进度。</para>
+        /// The progress callback for reporting pack progress. If null, progress is not reported.
+        /// </param>
         /// <exception cref="ArgumentNullException">
         /// <para>当 <paramref name="stream"/> 为 null 或 <paramref name="entries"/> 为 null 时抛出。</para>
         /// Thrown when <paramref name="stream"/> is null or <paramref name="entries"/> is null.
         /// </exception>
-        public void PackToStream(Stream stream, IEnumerable<Nb0Entry> entries)
+        public void PackToStream(Stream stream, IEnumerable<Nb0Entry> entries, IProgress<Nb0PackProgress>? progress = null)
         {
             if (stream == null) throw new ArgumentNullException(nameof(stream));
             if (entries == null) throw new ArgumentNullException(nameof(entries));
 
             var entryList = new List<Nb0Entry>(entries);
-            WriteNb0Core(stream, entryList);
+            WriteNb0Core(stream, entryList, progress);
         }
 
         /// <summary>
@@ -135,6 +147,10 @@ namespace FirmwareKit.Nb0
         /// <para>要打包的 <see cref="Nb0Entry"/> 条目集合。</para>
         /// The collection of <see cref="Nb0Entry"/> entries to pack.
         /// </param>
+        /// <param name="progress">
+        /// <para>用于报告打包进度的进度回调。如果为 null，则不报告进度。</para>
+        /// The progress callback for reporting pack progress. If null, progress is not reported.
+        /// </param>
         /// <param name="cancellationToken">
         /// <para>用于监视取消请求的令牌。</para>
         /// The token to monitor for cancellation requests.
@@ -147,13 +163,13 @@ namespace FirmwareKit.Nb0
         /// <para>当 <paramref name="stream"/> 为 null 或 <paramref name="entries"/> 为 null 时抛出。</para>
         /// Thrown when <paramref name="stream"/> is null or <paramref name="entries"/> is null.
         /// </exception>
-        public async Task PackToStreamAsync(Stream stream, IEnumerable<Nb0Entry> entries, CancellationToken cancellationToken = default)
+        public async Task PackToStreamAsync(Stream stream, IEnumerable<Nb0Entry> entries, IProgress<Nb0PackProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             if (stream == null) throw new ArgumentNullException(nameof(stream));
             if (entries == null) throw new ArgumentNullException(nameof(entries));
 
             var entryList = new List<Nb0Entry>(entries);
-            await WriteNb0CoreAsync(stream, entryList, cancellationToken).ConfigureAwait(false);
+            await WriteNb0CoreAsync(stream, entryList, cancellationToken, progress).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -181,6 +197,10 @@ namespace FirmwareKit.Nb0
         /// <para>输出 NB0 文件的完整路径。</para>
         /// The full path of the output NB0 file.
         /// </param>
+        /// <param name="progress">
+        /// <para>用于报告打包进度的进度回调。如果为 null，则不报告进度。</para>
+        /// The progress callback for reporting pack progress. If null, progress is not reported.
+        /// </param>
         /// <exception cref="ArgumentNullException">
         /// <para>当 <paramref name="sourceDirectory"/> 或 <paramref name="outputFilePath"/> 为 null 或空字符串时抛出。</para>
         /// Thrown when <paramref name="sourceDirectory"/> or <paramref name="outputFilePath"/> is null or empty.
@@ -193,7 +213,7 @@ namespace FirmwareKit.Nb0
         /// <para>当目录中未找到任何文件，或条目名称包含非 ASCII 字符、超过最大长度限制或存在重复名称时抛出。</para>
         /// Thrown when no files are found in the directory, or when entry names contain non-ASCII characters, exceed maximum length, or have duplicate names.
         /// </exception>
-        public static void PackFromDirectory(string sourceDirectory, string outputFilePath)
+        public static void PackFromDirectory(string sourceDirectory, string outputFilePath, IProgress<Nb0PackProgress>? progress = null)
         {
             if (sourceDirectory == null) throw new ArgumentNullException(nameof(sourceDirectory));
             if (sourceDirectory.Length == 0) throw new ArgumentException("Value cannot be an empty string.", nameof(sourceDirectory));
@@ -263,8 +283,10 @@ namespace FirmwareKit.Nb0
             byte[] copyBuffer = ArrayPool<byte>.Shared.Rent(DefaultBufferSize);
             try
             {
-                foreach (var (_, filePath, fileSize) in fileEntries)
+                for (int i = 0; i < fileEntries.Count; i++)
                 {
+                    var (entryName, filePath, fileSize) = fileEntries[i];
+
                     if (fileSize > 0)
                     {
                         using var inputFile = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.SequentialScan);
@@ -284,6 +306,13 @@ namespace FirmwareKit.Nb0
                     long padding = (4 - (fileSize % 4)) % 4;
                     if (padding > 0)
                         writer.Write(PaddingBuffer, 0, (int)padding);
+
+                    progress?.Report(new Nb0PackProgress
+                    {
+                        TotalEntries = fileEntries.Count,
+                        CompletedEntries = i + 1,
+                        CurrentEntryName = entryName
+                    });
                 }
             }
             finally
@@ -303,6 +332,10 @@ namespace FirmwareKit.Nb0
         /// <param name="outputFilePath">
         /// <para>输出 NB0 文件的完整路径。</para>
         /// The full path of the output NB0 file.
+        /// </param>
+        /// <param name="progress">
+        /// <para>用于报告打包进度的进度回调。如果为 null，则不报告进度。</para>
+        /// The progress callback for reporting pack progress. If null, progress is not reported.
         /// </param>
         /// <param name="cancellationToken">
         /// <para>用于监视取消请求的令牌。</para>
@@ -324,7 +357,7 @@ namespace FirmwareKit.Nb0
         /// <para>当目录中未找到任何文件，或条目名称包含非 ASCII 字符、超过最大长度限制或存在重复名称时抛出。</para>
         /// Thrown when no files are found in the directory, or when entry names contain non-ASCII characters, exceed maximum length, or have duplicate names.
         /// </exception>
-        public static async Task PackFromDirectoryAsync(string sourceDirectory, string outputFilePath, CancellationToken cancellationToken = default)
+        public static async Task PackFromDirectoryAsync(string sourceDirectory, string outputFilePath, IProgress<Nb0PackProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             if (sourceDirectory == null) throw new ArgumentNullException(nameof(sourceDirectory));
             if (sourceDirectory.Length == 0) throw new ArgumentException("Value cannot be an empty string.", nameof(sourceDirectory));
@@ -395,9 +428,11 @@ namespace FirmwareKit.Nb0
             byte[] copyBuffer = ArrayPool<byte>.Shared.Rent(DefaultBufferSize);
             try
             {
-                foreach (var (_, filePath, fileSize) in fileEntries)
+                for (int i = 0; i < fileEntries.Count; i++)
                 {
                     cancellationToken.ThrowIfCancellationRequested();
+
+                    var (entryName, filePath, fileSize) = fileEntries[i];
 
                     if (fileSize > 0)
                     {
@@ -418,6 +453,13 @@ namespace FirmwareKit.Nb0
                     long padding = (4 - (fileSize % 4)) % 4;
                     if (padding > 0)
                         await outputStream.WriteAsync(PaddingBuffer, 0, (int)padding, cancellationToken).ConfigureAwait(false);
+
+                    progress?.Report(new Nb0PackProgress
+                    {
+                        TotalEntries = fileEntries.Count,
+                        CompletedEntries = i + 1,
+                        CurrentEntryName = entryName
+                    });
                 }
             }
             finally
@@ -426,7 +468,7 @@ namespace FirmwareKit.Nb0
             }
         }
 
-        private void WriteNb0Core(Stream stream, List<Nb0Entry> entries)
+        private void WriteNb0Core(Stream stream, List<Nb0Entry> entries, IProgress<Nb0PackProgress>? progress = null)
         {
             // Validate unique entry names
             var names = new HashSet<string>();
@@ -498,6 +540,13 @@ namespace FirmwareKit.Nb0
                     long padding = (4 - (fileSize % 4)) % 4;
                     if (padding > 0)
                         writer.Write(PaddingBuffer, 0, (int)padding);
+
+                    progress?.Report(new Nb0PackProgress
+                    {
+                        TotalEntries = entries.Count,
+                        CompletedEntries = i + 1,
+                        CurrentEntryName = entry.Header.Name
+                    });
                 }
             }
             finally
@@ -506,7 +555,7 @@ namespace FirmwareKit.Nb0
             }
         }
 
-        private async Task WriteNb0CoreAsync(Stream stream, List<Nb0Entry> entries, CancellationToken cancellationToken)
+        private async Task WriteNb0CoreAsync(Stream stream, List<Nb0Entry> entries, CancellationToken cancellationToken, IProgress<Nb0PackProgress>? progress = null)
         {
             // Validate unique entry names
             var names = new HashSet<string>();
@@ -584,6 +633,13 @@ namespace FirmwareKit.Nb0
                     long padding = (4 - (fileSize % 4)) % 4;
                     if (padding > 0)
                         await stream.WriteAsync(PaddingBuffer, 0, (int)padding, cancellationToken).ConfigureAwait(false);
+
+                    progress?.Report(new Nb0PackProgress
+                    {
+                        TotalEntries = entries.Count,
+                        CompletedEntries = i + 1,
+                        CurrentEntryName = entry.Header.Name
+                    });
                 }
             }
             finally
@@ -686,7 +742,7 @@ namespace FirmwareKit.Nb0
             if (nameByteCount > Nb0EntryHeader.NameLength - 1)
                 throw new ArgumentException($"Entry name exceeds maximum length of {Nb0EntryHeader.NameLength - 1} ASCII bytes. Actual: {nameByteCount} bytes.", nameof(name));
 
-            var entry = new Nb0Entry(name, Array.Empty<byte>());
+            var entry = new Nb0Entry(new Nb0EntryHeader { Name = name });
             entry.FilePath = filePath;
             _entries.Add(entry);
             return this;
@@ -723,8 +779,14 @@ namespace FirmwareKit.Nb0
             if (!File.Exists(filePath)) throw new FileNotFoundException($"File not found: {filePath}", filePath);
 
             string name = entryName ?? Path.GetFileName(filePath);
-            byte[] data = File.ReadAllBytes(filePath);
-            _entries.Add(new Nb0Entry(name, data));
+
+            int nameByteCount = Encoding.ASCII.GetByteCount(name);
+            if (nameByteCount > Nb0EntryHeader.NameLength - 1)
+                throw new ArgumentException($"Entry name exceeds maximum length of {Nb0EntryHeader.NameLength - 1} ASCII bytes. Actual: {nameByteCount} bytes.", nameof(entryName));
+
+            var entry = new Nb0Entry(new Nb0EntryHeader { Name = name });
+            entry.FilePath = filePath;
+            _entries.Add(entry);
             return this;
         }
 
@@ -762,8 +824,14 @@ namespace FirmwareKit.Nb0
             {
                 string relativePath = StreamHelper.GetRelativePath(directoryPath, filePath);
                 string entryName = !string.IsNullOrEmpty(prefix) ? $"{prefix}/{relativePath}" : relativePath;
-                byte[] data = File.ReadAllBytes(filePath);
-                _entries.Add(new Nb0Entry(entryName, data));
+
+                int nameByteCount = Encoding.ASCII.GetByteCount(entryName);
+                if (nameByteCount > Nb0EntryHeader.NameLength - 1)
+                    continue;
+
+                var entry = new Nb0Entry(new Nb0EntryHeader { Name = entryName });
+                entry.FilePath = filePath;
+                _entries.Add(entry);
             }
 
             return this;
@@ -777,10 +845,14 @@ namespace FirmwareKit.Nb0
         /// <para>输出 NB0 文件的完整路径。</para>
         /// The full path of the output NB0 file.
         /// </param>
-        public void PackTo(string outputFilePath)
+        /// <param name="progress">
+        /// <para>用于报告打包进度的进度回调。如果为 null，则不报告进度。</para>
+        /// The progress callback for reporting pack progress. If null, progress is not reported.
+        /// </param>
+        public void PackTo(string outputFilePath, IProgress<Nb0PackProgress>? progress = null)
         {
             var packer = new Nb0Packer();
-            packer.Pack(outputFilePath, _entries);
+            packer.Pack(outputFilePath, _entries, progress);
         }
 
         /// <summary>
@@ -791,6 +863,10 @@ namespace FirmwareKit.Nb0
         /// <para>输出 NB0 文件的完整路径。</para>
         /// The full path of the output NB0 file.
         /// </param>
+        /// <param name="progress">
+        /// <para>用于报告打包进度的进度回调。如果为 null，则不报告进度。</para>
+        /// The progress callback for reporting pack progress. If null, progress is not reported.
+        /// </param>
         /// <param name="cancellationToken">
         /// <para>用于监视取消请求的令牌。</para>
         /// The token to monitor for cancellation requests.
@@ -799,10 +875,10 @@ namespace FirmwareKit.Nb0
         /// <para>表示异步打包操作的任务。</para>
         /// A task representing the asynchronous pack operation.
         /// </returns>
-        public async Task PackToAsync(string outputFilePath, CancellationToken cancellationToken = default)
+        public async Task PackToAsync(string outputFilePath, IProgress<Nb0PackProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             var packer = new Nb0Packer();
-            await packer.PackAsync(outputFilePath, _entries, cancellationToken).ConfigureAwait(false);
+            await packer.PackAsync(outputFilePath, _entries, progress, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -813,10 +889,14 @@ namespace FirmwareKit.Nb0
         /// <para>要写入的目标流。</para>
         /// The target stream to write to.
         /// </param>
-        public void PackToStream(Stream stream)
+        /// <param name="progress">
+        /// <para>用于报告打包进度的进度回调。如果为 null，则不报告进度。</para>
+        /// The progress callback for reporting pack progress. If null, progress is not reported.
+        /// </param>
+        public void PackToStream(Stream stream, IProgress<Nb0PackProgress>? progress = null)
         {
             var packer = new Nb0Packer();
-            packer.PackToStream(stream, _entries);
+            packer.PackToStream(stream, _entries, progress);
         }
 
         /// <summary>
@@ -827,6 +907,10 @@ namespace FirmwareKit.Nb0
         /// <para>要写入的目标流。</para>
         /// The target stream to write to.
         /// </param>
+        /// <param name="progress">
+        /// <para>用于报告打包进度的进度回调。如果为 null，则不报告进度。</para>
+        /// The progress callback for reporting pack progress. If null, progress is not reported.
+        /// </param>
         /// <param name="cancellationToken">
         /// <para>用于监视取消请求的令牌。</para>
         /// The token to monitor for cancellation requests.
@@ -835,10 +919,10 @@ namespace FirmwareKit.Nb0
         /// <para>表示异步打包操作的任务。</para>
         /// A task representing the asynchronous pack operation.
         /// </returns>
-        public async Task PackToStreamAsync(Stream stream, CancellationToken cancellationToken = default)
+        public async Task PackToStreamAsync(Stream stream, IProgress<Nb0PackProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             var packer = new Nb0Packer();
-            await packer.PackToStreamAsync(stream, _entries, cancellationToken).ConfigureAwait(false);
+            await packer.PackToStreamAsync(stream, _entries, progress, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -925,7 +1009,8 @@ namespace FirmwareKit.Nb0
         /// </exception>
         internal static byte[] ComputeMd5FromStream(Stream stream, long length, byte[] buffer)
         {
-            using (var md5 = MD5.Create())
+#if NETSTANDARD2_0
+            using (var md5 = new MD5CryptoServiceProvider())
             {
                 md5.Initialize();
                 long remaining = length;
@@ -941,6 +1026,22 @@ namespace FirmwareKit.Nb0
                 md5.TransformFinalBlock(buffer, 0, 0);
                 return md5.Hash!;
             }
+#else
+            using (var hash = IncrementalHash.CreateHash(HashAlgorithmName.MD5))
+            {
+                long remaining = length;
+                while (remaining > 0)
+                {
+                    int toRead = (int)Math.Min(remaining, buffer.Length);
+                    int read = stream.Read(buffer, 0, toRead);
+                    if (read == 0)
+                        throw new EndOfStreamException($"Unexpected end of stream while computing MD5. {length - remaining} of {length} bytes read.");
+                    hash.AppendData(buffer, 0, read);
+                    remaining -= read;
+                }
+                return hash.GetHashAndReset();
+            }
+#endif
         }
 
         /// <summary>
@@ -973,7 +1074,8 @@ namespace FirmwareKit.Nb0
         /// </exception>
         internal static async Task<byte[]> ComputeMd5FromStreamAsync(Stream stream, long length, byte[] buffer, CancellationToken cancellationToken)
         {
-            using (var md5 = MD5.Create())
+#if NETSTANDARD2_0
+            using (var md5 = new MD5CryptoServiceProvider())
             {
                 md5.Initialize();
                 long remaining = length;
@@ -989,6 +1091,22 @@ namespace FirmwareKit.Nb0
                 md5.TransformFinalBlock(buffer, 0, 0);
                 return md5.Hash!;
             }
+#else
+            using (var hash = IncrementalHash.CreateHash(HashAlgorithmName.MD5))
+            {
+                long remaining = length;
+                while (remaining > 0)
+                {
+                    int toRead = (int)Math.Min(remaining, buffer.Length);
+                    int read = await stream.ReadAsync(buffer, 0, toRead, cancellationToken).ConfigureAwait(false);
+                    if (read == 0)
+                        throw new EndOfStreamException($"Unexpected end of stream while computing MD5. {length - remaining} of {length} bytes read.");
+                    hash.AppendData(buffer, 0, read);
+                    remaining -= read;
+                }
+                return hash.GetHashAndReset();
+            }
+#endif
         }
     }
 }

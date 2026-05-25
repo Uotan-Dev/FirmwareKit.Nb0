@@ -10,6 +10,8 @@ namespace FirmwareKit.Nb0
     /// </summary>
     public sealed class Nb0Entry
     {
+        private long _cachedFileSize = -1;
+
         /// <summary>
         /// <para>获取条目头信息。</para>
         /// Gets the entry header information.
@@ -23,10 +25,28 @@ namespace FirmwareKit.Nb0
         public byte[]? Data { get; set; }
 
         /// <summary>
-        /// <para>获取或设置条目数据的文件路径。设置后，打包时将从文件流式读取数据，而非使用 <see cref="Data"/> 属性。</para>
-        /// Gets or sets the file path for the entry data. When set, data will be read from the file at pack time instead of using the <see cref="Data"/> property.
+        /// <para>获取或设置条目数据的文件路径。设置后，打包时将从文件流式读取数据，而非使用 <see cref="Data"/> 属性。设置时自动缓存文件大小。</para>
+        /// Gets or sets the file path for the entry data. When set, data will be read from the file at pack time instead of using the <see cref="Data"/> property. File size is cached on set.
         /// </summary>
-        internal string? FilePath { get; set; }
+        internal string? FilePath
+        {
+            get => _filePath;
+            set
+            {
+                _filePath = value;
+                if (value != null)
+                {
+                    var fi = new FileInfo(value);
+                    _cachedFileSize = fi.Exists ? fi.Length : 0;
+                }
+                else
+                {
+                    _cachedFileSize = -1;
+                }
+            }
+        }
+
+        private string? _filePath;
 
         /// <summary>
         /// <para>使用指定的条目头初始化 <see cref="Nb0Entry"/> 的新实例。</para>
@@ -95,8 +115,8 @@ namespace FirmwareKit.Nb0
         }
 
         /// <summary>
-        /// <para>获取条目的文件大小。如果数据为 null 则返回 0。</para>
-        /// Gets the file size of the entry. Returns 0 if data is null.
+        /// <para>获取条目的文件大小。如果数据为 null 则返回 0。使用缓存值避免重复文件系统访问。</para>
+        /// Gets the file size of the entry. Returns 0 if data is null. Uses cached value to avoid repeated file system access.
         /// </summary>
         /// <returns>
         /// <para>数据长度（字节），若数据为 null 则为 0。</para>
@@ -106,11 +126,8 @@ namespace FirmwareKit.Nb0
         {
             if (Data != null)
                 return Data.Length;
-            if (FilePath != null)
-            {
-                var fi = new FileInfo(FilePath);
-                return fi.Exists ? fi.Length : 0;
-            }
+            if (_cachedFileSize >= 0)
+                return _cachedFileSize;
             return 0;
         }
     }

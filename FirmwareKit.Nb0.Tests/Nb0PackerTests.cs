@@ -121,7 +121,7 @@ namespace FirmwareKit.Nb0.Tests
             var packer = new Nb0Packer();
 
             using var ms = new MemoryStream();
-            await packer.PackToStreamAsync(ms, new[] { entry }, TestContext.Current.CancellationToken);
+            await packer.PackToStreamAsync(ms, new[] { entry }, null, TestContext.Current.CancellationToken);
 
             ms.Position = 0;
             var metadata = Nb0Parser.ParseFromStream(ms);
@@ -141,7 +141,7 @@ namespace FirmwareKit.Nb0.Tests
             cts.Cancel();
 
             await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
-                packer.PackToStreamAsync(ms, new[] { entry }, cts.Token));
+                packer.PackToStreamAsync(ms, new[] { entry }, null, cts.Token));
         }
 
         [Fact]

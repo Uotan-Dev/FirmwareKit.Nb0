@@ -18,20 +18,15 @@ namespace FirmwareKit.Nb0
 
         private static readonly byte[] PaddingBuffer = { 0, 0, 0 };
 
-        private readonly IProgressReporter? _progressReporter;
         private readonly byte[] _checkBuffer = new byte[65536];
+        private readonly Nb0Extractor _extractor = new Nb0Extractor();
 
         /// <summary>
-        /// <para>使用指定的进度报告器初始化 <see cref="Nb0Processor"/> 的新实例。</para>
-        /// Initializes a new instance of <see cref="Nb0Processor"/> with the specified progress reporter.
+        /// <para>初始化 <see cref="Nb0Processor"/> 的新实例。</para>
+        /// Initializes a new instance of <see cref="Nb0Processor"/>.
         /// </summary>
-        /// <param name="progressReporter">
-        /// <para>可选的进度报告器实例，用于报告操作进度。</para>
-        /// An optional progress reporter instance for reporting operation progress.
-        /// </param>
-        public Nb0Processor(IProgressReporter? progressReporter = null)
+        public Nb0Processor()
         {
-            _progressReporter = progressReporter;
         }
 
         /// <summary>
@@ -100,6 +95,10 @@ namespace FirmwareKit.Nb0
         /// <para>可选的提取选项。</para>
         /// Optional extraction options.
         /// </param>
+        /// <param name="progress">
+        /// <para>可选的进度报告器，用于报告提取操作的进度。</para>
+        /// An optional progress reporter for reporting extraction operation progress.
+        /// </param>
         /// <returns>
         /// <para>包含提取结果的 <see cref="ExtractionResult"/> 实例。</para>
         /// An <see cref="ExtractionResult"/> instance containing the extraction results.
@@ -108,10 +107,9 @@ namespace FirmwareKit.Nb0
         /// <para>当 <paramref name="filePath"/> 或 <paramref name="outputDirectory"/> 为 null 或空时抛出。</para>
         /// Thrown when <paramref name="filePath"/> or <paramref name="outputDirectory"/> is null or empty.
         /// </exception>
-        public ExtractionResult Extract(string filePath, string outputDirectory, ExtractionOptions? options = null)
+        public ExtractionResult Extract(string filePath, string outputDirectory, ExtractionOptions? options = null, IProgress<Nb0ExtractionProgress>? progress = null)
         {
-            var extractor = new Nb0Extractor(_progressReporter);
-            return extractor.Extract(filePath, outputDirectory, options);
+            return _extractor.Extract(filePath, outputDirectory, options, progress);
         }
 
         /// <summary>
@@ -130,6 +128,10 @@ namespace FirmwareKit.Nb0
         /// <para>可选的提取选项。</para>
         /// Optional extraction options.
         /// </param>
+        /// <param name="progress">
+        /// <para>可选的进度报告器，用于报告提取操作的进度。</para>
+        /// An optional progress reporter for reporting extraction operation progress.
+        /// </param>
         /// <param name="cancellationToken">
         /// <para>用于取消异步操作的取消令牌。</para>
         /// A cancellation token for canceling the asynchronous operation.
@@ -146,10 +148,9 @@ namespace FirmwareKit.Nb0
         /// <para>当操作被取消时抛出。</para>
         /// Thrown when the operation is canceled.
         /// </exception>
-        public Task<ExtractionResult> ExtractAsync(string filePath, string outputDirectory, ExtractionOptions? options = null, CancellationToken cancellationToken = default)
+        public Task<ExtractionResult> ExtractAsync(string filePath, string outputDirectory, ExtractionOptions? options = null, IProgress<Nb0ExtractionProgress>? progress = null, CancellationToken cancellationToken = default)
         {
-            var extractor = new Nb0Extractor(_progressReporter);
-            return extractor.ExtractAsync(filePath, outputDirectory, options, cancellationToken);
+            return _extractor.ExtractAsync(filePath, outputDirectory, options, progress, cancellationToken);
         }
 
         /// <summary>
@@ -160,6 +161,10 @@ namespace FirmwareKit.Nb0
         /// <para>要校验的 NB0 固件文件路径。</para>
         /// The path of the NB0 firmware file to verify.
         /// </param>
+        /// <param name="progress">
+        /// <para>可选的进度报告器，用于报告校验操作的进度。</para>
+        /// An optional progress reporter for reporting verification operation progress.
+        /// </param>
         /// <returns>
         /// <para>包含每个条目校验结果的 <see cref="CheckResult"/> 实例。</para>
         /// A <see cref="CheckResult"/> instance containing the verification results for each entry.
@@ -168,13 +173,13 @@ namespace FirmwareKit.Nb0
         /// <para>当 <paramref name="filePath"/> 为 null 或空时抛出。</para>
         /// Thrown when <paramref name="filePath"/> is null or empty.
         /// </exception>
-        public CheckResult Check(string filePath)
+        public CheckResult Check(string filePath, IProgress<Nb0CheckProgress>? progress = null)
         {
             if (filePath == null) throw new ArgumentNullException(nameof(filePath));
             if (filePath.Length == 0) throw new ArgumentException("Value cannot be an empty string.", nameof(filePath));
 
             using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.SequentialScan);
-            return CheckFromStream(stream);
+            return CheckFromStream(stream, progress);
         }
 
         /// <summary>
@@ -184,6 +189,10 @@ namespace FirmwareKit.Nb0
         /// <param name="filePath">
         /// <para>要校验的 NB0 固件文件路径。</para>
         /// The path of the NB0 firmware file to verify.
+        /// </param>
+        /// <param name="progress">
+        /// <para>可选的进度报告器，用于报告校验操作的进度。</para>
+        /// An optional progress reporter for reporting verification operation progress.
         /// </param>
         /// <param name="cancellationToken">
         /// <para>用于取消异步操作的取消令牌。</para>
@@ -201,13 +210,13 @@ namespace FirmwareKit.Nb0
         /// <para>当操作被取消时抛出。</para>
         /// Thrown when the operation is canceled.
         /// </exception>
-        public async Task<CheckResult> CheckAsync(string filePath, CancellationToken cancellationToken = default)
+        public async Task<CheckResult> CheckAsync(string filePath, IProgress<Nb0CheckProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             if (filePath == null) throw new ArgumentNullException(nameof(filePath));
             if (filePath.Length == 0) throw new ArgumentException("Value cannot be an empty string.", nameof(filePath));
 
             using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 65536, FileOptions.SequentialScan);
-            return await CheckFromStreamAsync(stream, cancellationToken).ConfigureAwait(false);
+            return await CheckFromStreamAsync(stream, progress, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -218,6 +227,10 @@ namespace FirmwareKit.Nb0
         /// <para>包含 NB0 固件数据的流。</para>
         /// The stream containing NB0 firmware data.
         /// </param>
+        /// <param name="progress">
+        /// <para>可选的进度报告器，用于报告校验操作的进度。</para>
+        /// An optional progress reporter for reporting verification operation progress.
+        /// </param>
         /// <returns>
         /// <para>包含每个条目校验结果的 <see cref="CheckResult"/> 实例。</para>
         /// A <see cref="CheckResult"/> instance containing the verification results for each entry.
@@ -226,12 +239,11 @@ namespace FirmwareKit.Nb0
         /// <para>当 <paramref name="stream"/> 为 null 时抛出。</para>
         /// Thrown when <paramref name="stream"/> is null.
         /// </exception>
-        public CheckResult CheckFromStream(Stream stream)
+        public CheckResult CheckFromStream(Stream stream, IProgress<Nb0CheckProgress>? progress = null)
         {
             if (stream == null) throw new ArgumentNullException(nameof(stream));
 
             var metadata = Nb0Parser.ParseFromStream(stream);
-            var extractor = new Nb0Extractor(_progressReporter);
             var result = new CheckResult
             {
                 TotalEntries = metadata.Entries.Count,
@@ -242,12 +254,11 @@ namespace FirmwareKit.Nb0
             {
                 var entry = metadata.Entries[i];
 
-                _progressReporter?.Report(new ProgressReport
+                progress?.Report(new Nb0CheckProgress
                 {
-                    Operation = "Check",
-                    CurrentItem = entry.Name,
-                    CurrentIndex = i + 1,
-                    TotalCount = metadata.Entries.Count
+                    TotalEntries = metadata.Entries.Count,
+                    CompletedEntries = i,
+                    CurrentEntryName = entry.Name
                 });
 
                 EntryCheckResult entryResult;
@@ -262,7 +273,7 @@ namespace FirmwareKit.Nb0
                 }
                 else
                 {
-                    entryResult = CheckEntry(stream, entry, i, metadata, extractor);
+                    entryResult = CheckEntry(stream, entry, i, metadata);
                 }
                 result.EntryResults.Add(entryResult);
 
@@ -286,6 +297,10 @@ namespace FirmwareKit.Nb0
         /// <para>包含 NB0 固件数据的流。</para>
         /// The stream containing NB0 firmware data.
         /// </param>
+        /// <param name="progress">
+        /// <para>可选的进度报告器，用于报告校验操作的进度。</para>
+        /// An optional progress reporter for reporting verification operation progress.
+        /// </param>
         /// <param name="cancellationToken">
         /// <para>用于取消异步操作的取消令牌。</para>
         /// A cancellation token for canceling the asynchronous operation.
@@ -302,12 +317,11 @@ namespace FirmwareKit.Nb0
         /// <para>当操作被取消时抛出。</para>
         /// Thrown when the operation is canceled.
         /// </exception>
-        public async Task<CheckResult> CheckFromStreamAsync(Stream stream, CancellationToken cancellationToken = default)
+        public async Task<CheckResult> CheckFromStreamAsync(Stream stream, IProgress<Nb0CheckProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             if (stream == null) throw new ArgumentNullException(nameof(stream));
 
             var metadata = await Nb0Parser.ParseFromStreamAsync(stream, cancellationToken).ConfigureAwait(false);
-            var extractor = new Nb0Extractor(_progressReporter);
             var result = new CheckResult
             {
                 TotalEntries = metadata.Entries.Count,
@@ -319,12 +333,11 @@ namespace FirmwareKit.Nb0
                 cancellationToken.ThrowIfCancellationRequested();
                 var entry = metadata.Entries[i];
 
-                _progressReporter?.Report(new ProgressReport
+                progress?.Report(new Nb0CheckProgress
                 {
-                    Operation = "Check",
-                    CurrentItem = entry.Name,
-                    CurrentIndex = i + 1,
-                    TotalCount = metadata.Entries.Count
+                    TotalEntries = metadata.Entries.Count,
+                    CompletedEntries = i,
+                    CurrentEntryName = entry.Name
                 });
 
                 EntryCheckResult entryResult;
@@ -339,7 +352,7 @@ namespace FirmwareKit.Nb0
                 }
                 else
                 {
-                    entryResult = await CheckEntryAsync(stream, entry, i, metadata, extractor, cancellationToken).ConfigureAwait(false);
+                    entryResult = await CheckEntryAsync(stream, entry, i, metadata, cancellationToken).ConfigureAwait(false);
                 }
                 result.EntryResults.Add(entryResult);
 
@@ -425,6 +438,10 @@ namespace FirmwareKit.Nb0
         /// <para>输出的 NB0 固件文件路径。</para>
         /// The output NB0 firmware file path.
         /// </param>
+        /// <param name="progress">
+        /// <para>用于接收打包进度通知的进度报告器。</para>
+        /// The progress reporter to receive pack progress notifications.
+        /// </param>
         /// <exception cref="ArgumentNullException">
         /// <para>当 <paramref name="inputFilePath"/> 或 <paramref name="outputFilePath"/> 为 null 或空时抛出。</para>
         /// Thrown when <paramref name="inputFilePath"/> or <paramref name="outputFilePath"/> is null or empty.
@@ -433,7 +450,7 @@ namespace FirmwareKit.Nb0
         /// <para>当输入流在读取完成前结束时抛出。</para>
         /// Thrown when the input stream ends before reading is complete.
         /// </exception>
-        public void Repack(string inputFilePath, string outputFilePath)
+        public void Repack(string inputFilePath, string outputFilePath, IProgress<Nb0PackProgress>? progress = null)
         {
             if (inputFilePath == null) throw new ArgumentNullException(nameof(inputFilePath));
             if (inputFilePath.Length == 0) throw new ArgumentException("Value cannot be an empty string.", nameof(inputFilePath));
@@ -503,6 +520,13 @@ namespace FirmwareKit.Nb0
                     long padding = (4 - (size % 4)) % 4;
                     if (padding > 0)
                         writer.Write(PaddingBuffer, 0, (int)padding);
+
+                    progress?.Report(new Nb0PackProgress
+                    {
+                        TotalEntries = metadata.Entries.Count,
+                        CompletedEntries = i + 1,
+                        CurrentEntryName = metadata.Entries[i].Name
+                    });
                 }
             }
             finally
@@ -523,6 +547,10 @@ namespace FirmwareKit.Nb0
         /// <para>输出的 NB0 固件文件路径。</para>
         /// The output NB0 firmware file path.
         /// </param>
+        /// <param name="progress">
+        /// <para>用于接收打包进度通知的进度报告器。</para>
+        /// The progress reporter to receive pack progress notifications.
+        /// </param>
         /// <param name="cancellationToken">
         /// <para>用于取消异步操作的取消令牌。</para>
         /// A cancellation token for canceling the asynchronous operation.
@@ -539,7 +567,7 @@ namespace FirmwareKit.Nb0
         /// <para>当输入流在读取完成前结束时抛出。</para>
         /// Thrown when the input stream ends before reading is complete.
         /// </exception>
-        public async Task RepackAsync(string inputFilePath, string outputFilePath, CancellationToken cancellationToken = default)
+        public async Task RepackAsync(string inputFilePath, string outputFilePath, IProgress<Nb0PackProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             if (inputFilePath == null) throw new ArgumentNullException(nameof(inputFilePath));
             if (inputFilePath.Length == 0) throw new ArgumentException("Value cannot be an empty string.", nameof(inputFilePath));
@@ -614,6 +642,13 @@ namespace FirmwareKit.Nb0
                     long padding = (4 - (size % 4)) % 4;
                     if (padding > 0)
                         await outputStream.WriteAsync(PaddingBuffer, 0, (int)padding, cancellationToken).ConfigureAwait(false);
+
+                    progress?.Report(new Nb0PackProgress
+                    {
+                        TotalEntries = metadata.Entries.Count,
+                        CompletedEntries = i + 1,
+                        CurrentEntryName = metadata.Entries[i].Name
+                    });
                 }
             }
             finally
@@ -622,7 +657,7 @@ namespace FirmwareKit.Nb0
             }
         }
 
-        private EntryCheckResult CheckEntry(Stream stream, Nb0FileEntry entry, int entryIndex, Nb0Metadata metadata, Nb0Extractor extractor)
+        private EntryCheckResult CheckEntry(Stream stream, Nb0FileEntry entry, int entryIndex, Nb0Metadata metadata)
         {
             var md5Record = Nb0Md5Helper.FindMd5Record(entry, entryIndex, metadata);
 
@@ -638,8 +673,8 @@ namespace FirmwareKit.Nb0
 
             try
             {
-                stream.Seek(md5Record.Offset, SeekOrigin.Begin);
-                byte[] actualMd5 = StreamHelper.ComputeMd5FromStream(stream, md5Record.Length, _checkBuffer);
+                stream.Seek(entry.FileDataOffset + entry.Offset, SeekOrigin.Begin);
+                byte[] actualMd5 = StreamHelper.ComputeMd5FromStream(stream, entry.Size, _checkBuffer);
 
                 bool isValid = md5Record.IsChecksumEqual(actualMd5);
 
@@ -667,7 +702,7 @@ namespace FirmwareKit.Nb0
             }
         }
 
-        private async Task<EntryCheckResult> CheckEntryAsync(Stream stream, Nb0FileEntry entry, int entryIndex, Nb0Metadata metadata, Nb0Extractor extractor, CancellationToken cancellationToken)
+        private async Task<EntryCheckResult> CheckEntryAsync(Stream stream, Nb0FileEntry entry, int entryIndex, Nb0Metadata metadata, CancellationToken cancellationToken)
         {
             var md5Record = Nb0Md5Helper.FindMd5Record(entry, entryIndex, metadata);
 
@@ -683,8 +718,8 @@ namespace FirmwareKit.Nb0
 
             try
             {
-                stream.Seek(md5Record.Offset, SeekOrigin.Begin);
-                byte[] actualMd5 = await StreamHelper.ComputeMd5FromStreamAsync(stream, md5Record.Length, _checkBuffer, cancellationToken).ConfigureAwait(false);
+                stream.Seek(entry.FileDataOffset + entry.Offset, SeekOrigin.Begin);
+                byte[] actualMd5 = await StreamHelper.ComputeMd5FromStreamAsync(stream, entry.Size, _checkBuffer, cancellationToken).ConfigureAwait(false);
 
                 bool isValid = md5Record.IsChecksumEqual(actualMd5);
 

@@ -1,6 +1,8 @@
 using System;
+using System.Buffers;
 using System.Collections.Generic;
 using System.IO;
+using System.Security.Cryptography;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -11,31 +13,27 @@ namespace FirmwareKit.Nb0
     /// <para>提供从 NB0 固件文件中提取条目的功能，支持 MD5 校验、进度报告和异步操作。</para>
     /// Provides functionality to extract entries from NB0 firmware files, with MD5 verification, progress reporting, and async support.
     /// </summary>
+    /// <remarks>
+    /// <para>此类型的实例方法不是线程安全的。不要从多个线程同时调用同一实例的方法。</para>
+    /// Instance methods of this type are not thread-safe. Do not call methods of the same instance from multiple threads concurrently.
+    /// </remarks>
     public sealed class Nb0Extractor
     {
         private const int DefaultBufferSize = 81920;
 
-        private readonly IProgressReporter? _progressReporter;
         private readonly int _bufferSize;
-        private readonly byte[] _buffer;
 
         /// <summary>
-        /// <para>使用指定的进度报告器和缓冲区大小初始化 <see cref="Nb0Extractor"/> 的新实例。</para>
-        /// Initializes a new instance of <see cref="Nb0Extractor"/> with the specified progress reporter and buffer size.
+        /// <para>使用指定的缓冲区大小初始化 <see cref="Nb0Extractor"/> 的新实例。</para>
+        /// Initializes a new instance of <see cref="Nb0Extractor"/> with the specified buffer size.
         /// </summary>
-        /// <param name="progressReporter">
-        /// <para>可选的进度报告器实例，用于报告提取进度。</para>
-        /// An optional progress reporter instance for reporting extraction progress.
-        /// </param>
         /// <param name="bufferSize">
         /// <para>用于文件 I/O 操作的缓冲区大小（字节），最小值为 4096。</para>
         /// The buffer size in bytes for file I/O operations. Minimum value is 4096.
         /// </param>
-        public Nb0Extractor(IProgressReporter? progressReporter = null, int bufferSize = DefaultBufferSize)
+        public Nb0Extractor(int bufferSize = DefaultBufferSize)
         {
-            _progressReporter = progressReporter;
             _bufferSize = Math.Max(bufferSize, 4096);
-            _buffer = new byte[_bufferSize];
         }
 
         /// <summary>
@@ -54,6 +52,10 @@ namespace FirmwareKit.Nb0
         /// <para>可选的提取选项，控制 MD5 校验、错误处理等行为。</para>
         /// Optional extraction options controlling MD5 verification, error handling, etc.
         /// </param>
+        /// <param name="progress">
+        /// <para>可选的进度报告器，用于报告提取进度信息。</para>
+        /// An optional progress reporter for reporting extraction progress.
+        /// </param>
         /// <returns>
         /// <para>包含提取结果的 <see cref="ExtractionResult"/> 实例。</para>
         /// An <see cref="ExtractionResult"/> instance containing the extraction results.
@@ -66,7 +68,7 @@ namespace FirmwareKit.Nb0
         /// <para>当 <see cref="ExtractionOptions.VerifyMd5"/> 为 true 且 MD5 校验失败，且 <see cref="ExtractionOptions.ContinueOnError"/> 为 false 时抛出。</para>
         /// Thrown when <see cref="ExtractionOptions.VerifyMd5"/> is true and MD5 verification fails, and <see cref="ExtractionOptions.ContinueOnError"/> is false.
         /// </exception>
-        public ExtractionResult Extract(string nb0FilePath, string outputDirectory, ExtractionOptions? options = null)
+        public ExtractionResult Extract(string nb0FilePath, string outputDirectory, ExtractionOptions? options = null, IProgress<Nb0ExtractionProgress>? progress = null)
         {
             if (nb0FilePath == null) throw new ArgumentNullException(nameof(nb0FilePath));
             if (nb0FilePath.Length == 0) throw new ArgumentException("Value cannot be an empty string.", nameof(nb0FilePath));
@@ -76,7 +78,7 @@ namespace FirmwareKit.Nb0
             options ??= ExtractionOptions.Default;
 
             using var stream = new FileStream(nb0FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, _bufferSize, FileOptions.SequentialScan);
-            return ExtractFromStream(stream, outputDirectory, options);
+            return ExtractFromStream(stream, outputDirectory, options, progress);
         }
 
         /// <summary>
@@ -94,6 +96,10 @@ namespace FirmwareKit.Nb0
         /// <param name="options">
         /// <para>可选的提取选项，控制 MD5 校验、错误处理等行为。</para>
         /// Optional extraction options controlling MD5 verification, error handling, etc.
+        /// </param>
+        /// <param name="progress">
+        /// <para>可选的进度报告器，用于报告提取进度信息。</para>
+        /// An optional progress reporter for reporting extraction progress.
         /// </param>
         /// <param name="cancellationToken">
         /// <para>用于取消异步操作的取消令牌。</para>
@@ -115,7 +121,7 @@ namespace FirmwareKit.Nb0
         /// <para>当 <see cref="ExtractionOptions.VerifyMd5"/> 为 true 且 MD5 校验失败，且 <see cref="ExtractionOptions.ContinueOnError"/> 为 false 时抛出。</para>
         /// Thrown when <see cref="ExtractionOptions.VerifyMd5"/> is true and MD5 verification fails, and <see cref="ExtractionOptions.ContinueOnError"/> is false.
         /// </exception>
-        public async Task<ExtractionResult> ExtractAsync(string nb0FilePath, string outputDirectory, ExtractionOptions? options = null, CancellationToken cancellationToken = default)
+        public async Task<ExtractionResult> ExtractAsync(string nb0FilePath, string outputDirectory, ExtractionOptions? options = null, IProgress<Nb0ExtractionProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             if (nb0FilePath == null) throw new ArgumentNullException(nameof(nb0FilePath));
             if (nb0FilePath.Length == 0) throw new ArgumentException("Value cannot be an empty string.", nameof(nb0FilePath));
@@ -125,7 +131,7 @@ namespace FirmwareKit.Nb0
             options ??= ExtractionOptions.Default;
 
             using var stream = new FileStream(nb0FilePath, FileMode.Open, FileAccess.Read, FileShare.Read, _bufferSize, FileOptions.Asynchronous | FileOptions.SequentialScan);
-            return await ExtractFromStreamAsync(stream, outputDirectory, options, cancellationToken).ConfigureAwait(false);
+            return await ExtractFromStreamAsync(stream, outputDirectory, options, progress, cancellationToken).ConfigureAwait(false);
         }
 
         /// <summary>
@@ -144,6 +150,10 @@ namespace FirmwareKit.Nb0
         /// <para>可选的提取选项，控制 MD5 校验、错误处理等行为。</para>
         /// Optional extraction options controlling MD5 verification, error handling, etc.
         /// </param>
+        /// <param name="progress">
+        /// <para>可选的进度报告器，用于报告提取进度信息。</para>
+        /// An optional progress reporter for reporting extraction progress.
+        /// </param>
         /// <returns>
         /// <para>包含提取结果的 <see cref="ExtractionResult"/> 实例。</para>
         /// An <see cref="ExtractionResult"/> instance containing the extraction results.
@@ -156,7 +166,7 @@ namespace FirmwareKit.Nb0
         /// <para>当 <see cref="ExtractionOptions.VerifyMd5"/> 为 true 且 MD5 校验失败，且 <see cref="ExtractionOptions.ContinueOnError"/> 为 false 时抛出。</para>
         /// Thrown when <see cref="ExtractionOptions.VerifyMd5"/> is true and MD5 verification fails, and <see cref="ExtractionOptions.ContinueOnError"/> is false.
         /// </exception>
-        public ExtractionResult ExtractFromStream(Stream stream, string outputDirectory, ExtractionOptions? options = null)
+        public ExtractionResult ExtractFromStream(Stream stream, string outputDirectory, ExtractionOptions? options = null, IProgress<Nb0ExtractionProgress>? progress = null)
         {
             if (stream == null) throw new ArgumentNullException(nameof(stream));
             if (outputDirectory == null) throw new ArgumentNullException(nameof(outputDirectory));
@@ -168,42 +178,48 @@ namespace FirmwareKit.Nb0
             Directory.CreateDirectory(outputDirectory);
 
             var result = new ExtractionResult { TotalEntries = metadata.Entries.Count };
+            bool needMd5 = options.VerifyMd5 && metadata.HasMd5Records;
 
-            for (int i = 0; i < metadata.Entries.Count; i++)
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(_bufferSize);
+            try
             {
-                var entry = metadata.Entries[i];
-
-                _progressReporter?.Report(new ProgressReport
+                for (int i = 0; i < metadata.Entries.Count; i++)
                 {
-                    Operation = "Extract",
-                    CurrentItem = entry.Name,
-                    CurrentIndex = i + 1,
-                    TotalCount = metadata.Entries.Count
-                });
+                    var entry = metadata.Entries[i];
 
-                try
-                {
-                    ExtractEntry(stream, entry, outputDirectory);
-
-                    if (options.VerifyMd5 && metadata.HasMd5Records && !entry.Name.EndsWith(".md5", StringComparison.OrdinalIgnoreCase))
+                    progress?.Report(new Nb0ExtractionProgress
                     {
-                        VerifyEntryMd5(stream, entry, i, metadata);
-                    }
+                        TotalEntries = metadata.Entries.Count,
+                        CompletedEntries = i,
+                        CurrentEntryName = entry.Name
+                    });
 
-                    result.ExtractedEntries++;
+                    try
+                    {
+                        bool isMd5Entry = entry.Name.EndsWith(".md5", StringComparison.OrdinalIgnoreCase);
+                        var md5Record = needMd5 && !isMd5Entry ? Nb0Md5Helper.FindMd5Record(entry, i, metadata) : null;
+
+                        ExtractEntry(stream, entry, outputDirectory, md5Record, buffer);
+
+                        result.ExtractedEntries++;
+                    }
+                    catch (Nb0Md5MismatchException)
+                    {
+                        result.FailedEntries++;
+                        result.Errors.Add($"MD5 verification failed for '{entry.Name}'");
+                        if (!options.ContinueOnError) throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        result.FailedEntries++;
+                        result.Errors.Add($"Failed to extract '{entry.Name}': {ex.Message}");
+                        if (!options.ContinueOnError) throw;
+                    }
                 }
-                catch (Nb0Md5MismatchException)
-                {
-                    result.FailedEntries++;
-                    result.Errors.Add($"MD5 verification failed for '{entry.Name}'");
-                    if (!options.ContinueOnError) throw;
-                }
-                catch (Exception ex)
-                {
-                    result.FailedEntries++;
-                    result.Errors.Add($"Failed to extract '{entry.Name}': {ex.Message}");
-                    if (!options.ContinueOnError) throw;
-                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
             }
 
             if (options.VerifyMd5 && !metadata.HasMd5Records)
@@ -233,6 +249,10 @@ namespace FirmwareKit.Nb0
         /// <para>可选的提取选项，控制 MD5 校验、错误处理等行为。</para>
         /// Optional extraction options controlling MD5 verification, error handling, etc.
         /// </param>
+        /// <param name="progress">
+        /// <para>可选的进度报告器，用于报告提取进度信息。</para>
+        /// An optional progress reporter for reporting extraction progress.
+        /// </param>
         /// <param name="cancellationToken">
         /// <para>用于取消异步操作的取消令牌。</para>
         /// A cancellation token for canceling the asynchronous operation.
@@ -253,7 +273,7 @@ namespace FirmwareKit.Nb0
         /// <para>当 <see cref="ExtractionOptions.VerifyMd5"/> 为 true 且 MD5 校验失败，且 <see cref="ExtractionOptions.ContinueOnError"/> 为 false 时抛出。</para>
         /// Thrown when <see cref="ExtractionOptions.VerifyMd5"/> is true and MD5 verification fails, and <see cref="ExtractionOptions.ContinueOnError"/> is false.
         /// </exception>
-        public async Task<ExtractionResult> ExtractFromStreamAsync(Stream stream, string outputDirectory, ExtractionOptions? options = null, CancellationToken cancellationToken = default)
+        public async Task<ExtractionResult> ExtractFromStreamAsync(Stream stream, string outputDirectory, ExtractionOptions? options = null, IProgress<Nb0ExtractionProgress>? progress = null, CancellationToken cancellationToken = default)
         {
             if (stream == null) throw new ArgumentNullException(nameof(stream));
             if (outputDirectory == null) throw new ArgumentNullException(nameof(outputDirectory));
@@ -265,47 +285,53 @@ namespace FirmwareKit.Nb0
             Directory.CreateDirectory(outputDirectory);
 
             var result = new ExtractionResult { TotalEntries = metadata.Entries.Count };
+            bool needMd5 = options.VerifyMd5 && metadata.HasMd5Records;
 
-            for (int i = 0; i < metadata.Entries.Count; i++)
+            byte[] buffer = ArrayPool<byte>.Shared.Rent(_bufferSize);
+            try
             {
-                cancellationToken.ThrowIfCancellationRequested();
-                var entry = metadata.Entries[i];
-
-                _progressReporter?.Report(new ProgressReport
+                for (int i = 0; i < metadata.Entries.Count; i++)
                 {
-                    Operation = "Extract",
-                    CurrentItem = entry.Name,
-                    CurrentIndex = i + 1,
-                    TotalCount = metadata.Entries.Count
-                });
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var entry = metadata.Entries[i];
 
-                try
-                {
-                    await ExtractEntryAsync(stream, entry, outputDirectory, cancellationToken).ConfigureAwait(false);
-
-                    if (options.VerifyMd5 && metadata.HasMd5Records && !entry.Name.EndsWith(".md5", StringComparison.OrdinalIgnoreCase))
+                    progress?.Report(new Nb0ExtractionProgress
                     {
-                        await VerifyEntryMd5Async(stream, entry, i, metadata, cancellationToken).ConfigureAwait(false);
-                    }
+                        TotalEntries = metadata.Entries.Count,
+                        CompletedEntries = i,
+                        CurrentEntryName = entry.Name
+                    });
 
-                    result.ExtractedEntries++;
+                    try
+                    {
+                        bool isMd5Entry = entry.Name.EndsWith(".md5", StringComparison.OrdinalIgnoreCase);
+                        var md5Record = needMd5 && !isMd5Entry ? Nb0Md5Helper.FindMd5Record(entry, i, metadata) : null;
+
+                        await ExtractEntryAsync(stream, entry, outputDirectory, md5Record, buffer, cancellationToken).ConfigureAwait(false);
+
+                        result.ExtractedEntries++;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
+                    }
+                    catch (Nb0Md5MismatchException)
+                    {
+                        result.FailedEntries++;
+                        result.Errors.Add($"MD5 verification failed for '{entry.Name}'");
+                        if (!options.ContinueOnError) throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        result.FailedEntries++;
+                        result.Errors.Add($"Failed to extract '{entry.Name}': {ex.Message}");
+                        if (!options.ContinueOnError) throw;
+                    }
                 }
-                catch (OperationCanceledException)
-                {
-                    throw;
-                }
-                catch (Nb0Md5MismatchException)
-                {
-                    result.FailedEntries++;
-                    result.Errors.Add($"MD5 verification failed for '{entry.Name}'");
-                    if (!options.ContinueOnError) throw;
-                }
-                catch (Exception ex)
-                {
-                    result.FailedEntries++;
-                    result.Errors.Add($"Failed to extract '{entry.Name}': {ex.Message}");
-                    if (!options.ContinueOnError) throw;
-                }
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(buffer);
             }
 
             if (options.VerifyMd5 && !metadata.HasMd5Records)
@@ -407,7 +433,7 @@ namespace FirmwareKit.Nb0
             return data;
         }
 
-        private void ExtractEntry(Stream stream, Nb0FileEntry entry, string outputDirectory)
+        private void ExtractEntry(Stream stream, Nb0FileEntry entry, string outputDirectory, Nb0Md5Record? md5Record, byte[] buffer)
         {
             string outputPath = Path.Combine(outputDirectory, SanitizeFileName(entry.Name));
             string? dir = Path.GetDirectoryName(outputPath);
@@ -416,10 +442,22 @@ namespace FirmwareKit.Nb0
             stream.Seek(entry.FileDataOffset + entry.Offset, SeekOrigin.Begin);
 
             using var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, _bufferSize);
-            StreamCopy(stream, fs, entry.Size);
+
+            if (md5Record != null)
+            {
+                byte[] actualMd5 = StreamCopyWithMd5(stream, fs, entry.Size, buffer);
+                if (!md5Record.IsChecksumEqual(actualMd5))
+                {
+                    throw new Nb0Md5MismatchException(entry.Name, md5Record.Md5Checksum, actualMd5);
+                }
+            }
+            else
+            {
+                StreamCopy(stream, fs, entry.Size, buffer);
+            }
         }
 
-        private async Task ExtractEntryAsync(Stream stream, Nb0FileEntry entry, string outputDirectory, CancellationToken cancellationToken)
+        private async Task ExtractEntryAsync(Stream stream, Nb0FileEntry entry, string outputDirectory, Nb0Md5Record? md5Record, byte[] buffer, CancellationToken cancellationToken)
         {
             string outputPath = Path.Combine(outputDirectory, SanitizeFileName(entry.Name));
             string? dir = Path.GetDirectoryName(outputPath);
@@ -428,86 +466,185 @@ namespace FirmwareKit.Nb0
             stream.Seek(entry.FileDataOffset + entry.Offset, SeekOrigin.Begin);
 
             using var fs = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None, _bufferSize, FileOptions.Asynchronous);
-            await StreamCopyAsync(stream, fs, entry.Size, cancellationToken).ConfigureAwait(false);
-        }
 
-        /// <summary>
-        /// <para>验证指定条目的 MD5 校验和。通过条目索引匹配对应的 MD5 记录。</para>
-        /// Verifies the MD5 checksum of the specified entry. Matches the corresponding MD5 record by entry index.
-        /// </summary>
-        /// <param name="stream">包含 NB0 固件数据的流。</param>
-        /// <param name="entry">要验证的条目。</param>
-        /// <param name="entryIndex">条目在列表中的索引。</param>
-        /// <param name="metadata">NB0 元数据，包含 MD5 记录列表。</param>
-        /// <exception cref="Nb0Md5MismatchException">当 MD5 校验失败时抛出。</exception>
-        private void VerifyEntryMd5(Stream stream, Nb0FileEntry entry, int entryIndex, Nb0Metadata metadata)
-        {
-            var md5Record = Nb0Md5Helper.FindMd5Record(entry, entryIndex, metadata);
-            if (md5Record == null)
-                return;
-
-            stream.Seek(md5Record.Offset, SeekOrigin.Begin);
-
-            byte[] actualMd5 = StreamHelper.ComputeMd5FromStream(stream, md5Record.Length, _buffer);
-
-            if (!md5Record.IsChecksumEqual(actualMd5))
+            if (md5Record != null)
             {
-                throw new Nb0Md5MismatchException(entry.Name, md5Record.Md5Checksum, actualMd5);
+                byte[] actualMd5 = await StreamCopyWithMd5Async(stream, fs, entry.Size, buffer, cancellationToken).ConfigureAwait(false);
+                if (!md5Record.IsChecksumEqual(actualMd5))
+                {
+                    throw new Nb0Md5MismatchException(entry.Name, md5Record.Md5Checksum, actualMd5);
+                }
+            }
+            else
+            {
+                await StreamCopyAsync(stream, fs, entry.Size, buffer, cancellationToken).ConfigureAwait(false);
             }
         }
 
-        /// <summary>
-        /// <para>异步验证指定条目的 MD5 校验和。通过条目索引匹配对应的 MD5 记录。</para>
-        /// Asynchronously verifies the MD5 checksum of the specified entry. Matches the corresponding MD5 record by entry index.
-        /// </summary>
-        /// <param name="stream">包含 NB0 固件数据的流。</param>
-        /// <param name="entry">要验证的条目。</param>
-        /// <param name="entryIndex">条目在列表中的索引。</param>
-        /// <param name="metadata">NB0 元数据，包含 MD5 记录列表。</param>
-        /// <param name="cancellationToken">取消令牌。</param>
-        /// <exception cref="Nb0Md5MismatchException">当 MD5 校验失败时抛出。</exception>
-        private async Task VerifyEntryMd5Async(Stream stream, Nb0FileEntry entry, int entryIndex, Nb0Metadata metadata, CancellationToken cancellationToken)
-        {
-            var md5Record = Nb0Md5Helper.FindMd5Record(entry, entryIndex, metadata);
-            if (md5Record == null)
-                return;
-
-            stream.Seek(md5Record.Offset, SeekOrigin.Begin);
-
-            byte[] actualMd5 = await StreamHelper.ComputeMd5FromStreamAsync(stream, md5Record.Length, _buffer, cancellationToken).ConfigureAwait(false);
-
-            if (!md5Record.IsChecksumEqual(actualMd5))
-            {
-                throw new Nb0Md5MismatchException(entry.Name, md5Record.Md5Checksum, actualMd5);
-            }
-        }
-
-        private void StreamCopy(Stream source, Stream destination, long size)
+        private static void StreamCopy(Stream source, Stream destination, long size, byte[] buffer)
         {
             long remaining = size;
             while (remaining > 0)
             {
-                int toRead = (int)Math.Min(remaining, _buffer.Length);
-                int read = source.Read(_buffer, 0, toRead);
+                int toRead = (int)Math.Min(remaining, buffer.Length);
+                int read = source.Read(buffer, 0, toRead);
                 if (read == 0)
                     throw new EndOfStreamException($"Unexpected end of stream while copying entry data. {size - remaining} of {size} bytes read.");
-                destination.Write(_buffer, 0, read);
+                destination.Write(buffer, 0, read);
                 remaining -= read;
             }
         }
 
-        private async Task StreamCopyAsync(Stream source, Stream destination, long size, CancellationToken cancellationToken)
+        private static async Task StreamCopyAsync(Stream source, Stream destination, long size, byte[] buffer, CancellationToken cancellationToken)
         {
             long remaining = size;
             while (remaining > 0)
             {
-                int toRead = (int)Math.Min(remaining, _buffer.Length);
-                int read = await source.ReadAsync(_buffer, 0, toRead, cancellationToken).ConfigureAwait(false);
+                int toRead = (int)Math.Min(remaining, buffer.Length);
+                int read = await source.ReadAsync(buffer, 0, toRead, cancellationToken).ConfigureAwait(false);
                 if (read == 0)
                     throw new EndOfStreamException($"Unexpected end of stream while copying entry data. {size - remaining} of {size} bytes read.");
-                await destination.WriteAsync(_buffer, 0, read, cancellationToken).ConfigureAwait(false);
+                await destination.WriteAsync(buffer, 0, read, cancellationToken).ConfigureAwait(false);
                 remaining -= read;
             }
+        }
+
+        /// <summary>
+        /// <para>将流数据拷贝到目标流的同时增量计算 MD5 哈希，实现一次 I/O 完成提取与校验。</para>
+        /// Copies stream data to the destination while incrementally computing the MD5 hash, achieving extraction and verification in a single I/O pass.
+        /// </summary>
+        /// <param name="source">
+        /// <para>源数据流。</para>
+        /// The source stream.
+        /// </param>
+        /// <param name="destination">
+        /// <para>目标输出流。</para>
+        /// The destination output stream.
+        /// </param>
+        /// <param name="size">
+        /// <para>要拷贝的字节数。</para>
+        /// The number of bytes to copy.
+        /// </param>
+        /// <param name="buffer">
+        /// <para>用于读取数据的缓冲区。</para>
+        /// The buffer used for reading data.
+        /// </param>
+        /// <returns>
+        /// <para>计算得到的 MD5 哈希值。</para>
+        /// The computed MD5 hash.
+        /// </returns>
+        /// <exception cref="EndOfStreamException">
+        /// <para>当源流在读取完成前结束时抛出。</para>
+        /// Thrown when the source stream ends before reading is complete.
+        /// </exception>
+        private static byte[] StreamCopyWithMd5(Stream source, Stream destination, long size, byte[] buffer)
+        {
+#if NETSTANDARD2_0
+            using (var md5 = new MD5CryptoServiceProvider())
+            {
+                md5.Initialize();
+                long remaining = size;
+                while (remaining > 0)
+                {
+                    int toRead = (int)Math.Min(remaining, buffer.Length);
+                    int read = source.Read(buffer, 0, toRead);
+                    if (read == 0)
+                        throw new EndOfStreamException($"Unexpected end of stream while copying entry data. {size - remaining} of {size} bytes read.");
+                    md5.TransformBlock(buffer, 0, read, buffer, 0);
+                    destination.Write(buffer, 0, read);
+                    remaining -= read;
+                }
+                md5.TransformFinalBlock(buffer, 0, 0);
+                return md5.Hash!;
+            }
+#else
+            using (var hash = IncrementalHash.CreateHash(HashAlgorithmName.MD5))
+            {
+                long remaining = size;
+                while (remaining > 0)
+                {
+                    int toRead = (int)Math.Min(remaining, buffer.Length);
+                    int read = source.Read(buffer, 0, toRead);
+                    if (read == 0)
+                        throw new EndOfStreamException($"Unexpected end of stream while copying entry data. {size - remaining} of {size} bytes read.");
+                    hash.AppendData(buffer, 0, read);
+                    destination.Write(buffer, 0, read);
+                    remaining -= read;
+                }
+                return hash.GetHashAndReset();
+            }
+#endif
+        }
+
+        /// <summary>
+        /// <para>异步将流数据拷贝到目标流的同时增量计算 MD5 哈希，实现一次 I/O 完成提取与校验。</para>
+        /// Asynchronously copies stream data to the destination while incrementally computing the MD5 hash, achieving extraction and verification in a single I/O pass.
+        /// </summary>
+        /// <param name="source">
+        /// <para>源数据流。</para>
+        /// The source stream.
+        /// </param>
+        /// <param name="destination">
+        /// <para>目标输出流。</para>
+        /// The destination output stream.
+        /// </param>
+        /// <param name="size">
+        /// <para>要拷贝的字节数。</para>
+        /// The number of bytes to copy.
+        /// </param>
+        /// <param name="buffer">
+        /// <para>用于读取数据的缓冲区。</para>
+        /// The buffer used for reading data.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// <para>用于取消异步操作的取消令牌。</para>
+        /// A cancellation token to cancel the asynchronous operation.
+        /// </param>
+        /// <returns>
+        /// <para>计算得到的 MD5 哈希值。</para>
+        /// The computed MD5 hash.
+        /// </returns>
+        /// <exception cref="EndOfStreamException">
+        /// <para>当源流在读取完成前结束时抛出。</para>
+        /// Thrown when the source stream ends before reading is complete.
+        /// </exception>
+        private static async Task<byte[]> StreamCopyWithMd5Async(Stream source, Stream destination, long size, byte[] buffer, CancellationToken cancellationToken)
+        {
+#if NETSTANDARD2_0
+            using (var md5 = new MD5CryptoServiceProvider())
+            {
+                md5.Initialize();
+                long remaining = size;
+                while (remaining > 0)
+                {
+                    int toRead = (int)Math.Min(remaining, buffer.Length);
+                    int read = await source.ReadAsync(buffer, 0, toRead, cancellationToken).ConfigureAwait(false);
+                    if (read == 0)
+                        throw new EndOfStreamException($"Unexpected end of stream while copying entry data. {size - remaining} of {size} bytes read.");
+                    md5.TransformBlock(buffer, 0, read, buffer, 0);
+                    await destination.WriteAsync(buffer, 0, read, cancellationToken).ConfigureAwait(false);
+                    remaining -= read;
+                }
+                md5.TransformFinalBlock(buffer, 0, 0);
+                return md5.Hash!;
+            }
+#else
+            using (var hash = IncrementalHash.CreateHash(HashAlgorithmName.MD5))
+            {
+                long remaining = size;
+                while (remaining > 0)
+                {
+                    int toRead = (int)Math.Min(remaining, buffer.Length);
+                    int read = await source.ReadAsync(buffer, 0, toRead, cancellationToken).ConfigureAwait(false);
+                    if (read == 0)
+                        throw new EndOfStreamException($"Unexpected end of stream while copying entry data. {size - remaining} of {size} bytes read.");
+                    hash.AppendData(buffer, 0, read);
+                    await destination.WriteAsync(buffer, 0, read, cancellationToken).ConfigureAwait(false);
+                    remaining -= read;
+                }
+                return hash.GetHashAndReset();
+            }
+#endif
         }
 
         internal static void WriteListFile(Nb0Metadata metadata, string outputDirectory)

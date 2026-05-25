@@ -133,14 +133,17 @@ namespace FirmwareKit.Nb0.Tests
         }
 
         [Fact]
-        public void ProgressReport_Progress_CalculatedCorrectly()
+        public void Nb0ExtractionProgress_PropertiesSetCorrectly()
         {
-            var report = new ProgressReport
+            var progress = new Nb0ExtractionProgress
             {
-                BytesProcessed = 50,
-                TotalBytes = 100
+                TotalEntries = 10,
+                CompletedEntries = 5,
+                CurrentEntryName = "test.img"
             };
-            Assert.Equal(50.0, report.Progress);
+            Assert.Equal(10, progress.TotalEntries);
+            Assert.Equal(5, progress.CompletedEntries);
+            Assert.Equal("test.img", progress.CurrentEntryName);
         }
 
         [Fact]

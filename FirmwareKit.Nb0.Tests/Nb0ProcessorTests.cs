@@ -239,7 +239,7 @@ namespace FirmwareKit.Nb0.Tests
             var processor = new Nb0Processor();
             var syncResult = processor.CheckFromStream(stream1);
 
-            var asyncResult = await processor.CheckFromStreamAsync(stream2, TestContext.Current.CancellationToken);
+            var asyncResult = await processor.CheckFromStreamAsync(stream2, null, TestContext.Current.CancellationToken);
 
             Assert.Equal(syncResult.TotalEntries, asyncResult.TotalEntries);
             Assert.Equal(syncResult.ValidEntries, asyncResult.ValidEntries);
